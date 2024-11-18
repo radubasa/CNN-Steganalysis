@@ -11,8 +11,8 @@ from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, ModelCh
 from sklearn.metrics import classification_report, confusion_matrix, recall_score, f1_score, precision_score, roc_auc_score
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.applications import ResNet50
-from tensorflow.keras.applications.resnet50 import preprocess_input
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.applications.vgg16 import preprocess_input
 import os
 from concurrent.futures import ThreadPoolExecutor
 
@@ -21,7 +21,7 @@ def preprocess_image(image_path):
     image = Image.open(image_path).convert('RGB')
     # Resize image to 512x512 and convert to numpy array
     image = np.array(image).reshape(512, 512, 3)
-    return image
+    return image.astype(np.float32)
 
 def preprocess_data(image_paths, labels):
     # Load and preprocess images
@@ -40,46 +40,23 @@ def preprocess_data(image_paths, labels):
 
     return images_scaled, labels, scaler
 
-def create_cnn_model(input_shape):
-    # Define a simple CNN model
-    model = Sequential([
-        Conv2D(32, (3, 3), activation='relu', input_shape=input_shape),
-        BatchNormalization(),
-        MaxPooling2D((2, 2)),
-        Conv2D(64, (3, 3), activation='relu'),
-        BatchNormalization(),
-        MaxPooling2D((2, 2)),
-        Conv2D(128, (3, 3), activation='relu'),
-        BatchNormalization(),
-        MaxPooling2D((2, 2)),
-        Conv2D(256, (3, 3), activation='relu'),
-        BatchNormalization(),
-        MaxPooling2D((2, 2)),
-        Flatten(),
-        Dense(256, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.01)),
-        Dropout(0.5),
-        Dense(2, activation='softmax')  # 2 output classes
-    ])
-    # Compile the model with Adam optimizer and binary cross-entropy loss
-    model.compile(optimizer=Adam(learning_rate=0.001), loss='binary_crossentropy', metrics=['accuracy'])
-    return model
-
-def create_resnet50_model(input_shape):
-    # Define a ResNet50 model with pre-trained weights
-    base_model = ResNet50(weights='imagenet', include_top=False, input_shape=input_shape)
+def create_vgg16_model(input_shape):
+    # Define a VGG16 model with pre-trained weights
+    base_model = VGG16(weights='imagenet', include_top=False, input_shape=input_shape)
+    
+    # Unfreeze the top layers of the base model
+    for layer in base_model.layers[-4:]:
+        layer.trainable = True
+    
     x = base_model.output
     x = GlobalAveragePooling2D()(x)
-    x = Dense(256, activation='relu')(x)
+    x = Dense(256, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.01))(x)
     x = Dropout(0.5)(x)
-    predictions = Dense(2, activation='softmax')(x)
+    predictions = Dense(2, activation='softmax')(x)  # Adjusted for 2 classes
     model = Model(inputs=base_model.input, outputs=predictions)
     
-    # Freeze the layers of the base model
-    for layer in base_model.layers:
-        layer.trainable = False
-    
-    # Compile the model with Adam optimizer and binary cross-entropy loss
-    model.compile(optimizer=Adam(learning_rate=0.001), loss='binary_crossentropy', metrics=['accuracy'])
+    # Compile the model with Adam optimizer and categorical cross-entropy loss
+    model.compile(optimizer=Adam(learning_rate=0.0001), loss='categorical_crossentropy', metrics=['accuracy'])
     return model
 
 def load_dataset(folder):
@@ -122,19 +99,18 @@ def main():
     validation_dataset = create_tf_dataset(validation_image_paths, validation_labels)
     test_dataset = create_tf_dataset(test_image_paths, test_labels)
 
-    # Create the CNN model
+    # Create the VGG16 model
     input_shape = (512, 512, 3)
-    model = create_cnn_model(input_shape)  # Comment this line to use ResNet50
-    # model = create_resnet50_model(input_shape)  # Uncomment this line to use ResNet50
+    model = create_vgg16_model(input_shape)  # Use VGG16 model
 
     # Data augmentation
     datagen = ImageDataGenerator(
         rescale=1.0/255.0,  # Normalize pixel values to [0, 1]
-        rotation_range=20,  # Randomly rotate images by up to 20 degrees
-        width_shift_range=0.2,  # Randomly shift images horizontally by up to 20%
-        height_shift_range=0.2,  # Randomly shift images vertically by up to 20%
-        shear_range=0.2,  # Randomly shear images by up to 20%
-        zoom_range=0.2,  # Randomly zoom into images by up to 20%
+        rotation_range=30,  # Randomly rotate images by up to 30 degrees
+        width_shift_range=0.3,  # Randomly shift images horizontally by up to 30%
+        height_shift_range=0.3,  # Randomly shift images vertically by up to 30%
+        shear_range=0.3,  # Randomly shear images by up to 30%
+        zoom_range=0.3,  # Randomly zoom into images by up to 30%
         horizontal_flip=True,  # Randomly flip images horizontally
         fill_mode='nearest'  # Fill in missing pixels with the nearest value
     )
@@ -156,62 +132,63 @@ def main():
     # Train the model
     history = model.fit(
         datagen.flow_from_directory(train_folder, target_size=(512, 512), batch_size=64, class_mode='categorical'),
-        epochs=10,  # Increased number of epochs for better training
+        epochs=50,  # Train for more epochs
         validation_data=datagen.flow_from_directory(validation_folder, target_size=(512, 512), batch_size=32, class_mode='categorical'),
         class_weight=class_weights,
         callbacks=[reduce_lr, early_stopping, model_checkpoint]
     )
 
     # Save the final model
-    model.save('model/modelCNN.keras')
+    model.save('model/modelVGG16.keras')
 
     # Evaluate the model (using the last iteration of the model)
-    y_pred = model.predict(datagen.flow_from_directory(test_folder, target_size=(512, 512), batch_size=64, class_mode='categorical', shuffle=False))
+    test_generator = datagen.flow_from_directory(test_folder, target_size=(512, 512), batch_size=64, class_mode='categorical', shuffle=False)
+    y_pred = model.predict(test_generator)
     y_pred_classes = np.argmax(y_pred, axis=1)
-    y_true = np.array([label for _, label in test_dataset.unbatch()])  # Convert test labels to 1D array
+    y_true = test_generator.classes  # Use the classes attribute from the generator
 
     # Print the metrics
-    print("CNN Classification Report:")
+    print("VGG16 Classification Report:")
     print(classification_report(y_true, y_pred_classes))
 
-    print("CNN Confusion Matrix:")
+    print("VGG16 Confusion Matrix:")
     conf_matrix = confusion_matrix(y_true, y_pred_classes)
     print(conf_matrix)
 
     # Accuracy
     accuracy = np.mean(y_pred_classes == y_true)
-    print("CNN Accuracy:", accuracy)
+    print("VGG16 Accuracy:", accuracy)
 
     # Precision
-    precision = precision_score(y_true, y_pred_classes)
-    print("CNN Precision:", precision)
+    precision = precision_score(y_true, y_pred_classes, average='binary')
+    print("VGG16 Precision:", precision)
 
     # Recall
-    recall = recall_score(y_true, y_pred_classes)
-    print("CNN Recall:", recall)
+    recall = recall_score(y_true, y_pred_classes, average='binary')
+    print("VGG16 Recall:", recall)
 
     # F1 Score
-    f1 = f1_score(y_true, y_pred_classes)
-    print("CNN F1 Score:", f1)
+    f1 = f1_score(y_true, y_pred_classes, average='binary')
+    print("VGG16 F1 Score:", f1)
 
-    # Specificity
-    tn, fp, fn, tp = conf_matrix.ravel()
-    specificity = tn / (tn + fp)
-    print("CNN Specificity:", specificity)
+    # # Specificity
+    # tn, fp, fn, tp = conf_matrix.ravel()
+    # specificity = tn / (tn + fp)
+    # print("VGG16 Specificity:", specificity)
 
-    # False Positive Rate (FPR)
-    fpr = fp / (fp + tn)
-    print("CNN False Positive Rate (FPR):", fpr)
+    # # False Positive Rate (FPR)
+    # fpr = fp / (fp + tn)
+    # print("VGG16 False Positive Rate (FPR):", fpr)
 
     # Area Under the Receiver Operating Characteristic curve (AUC-ROC)
     roc_auc = roc_auc_score(y_true, y_pred_classes)
-    print("CNN AUC-ROC:", roc_auc)
+    print("VGG16 AUC-ROC:", roc_auc)
 
     # Confusion Matrix details
-    print("True Positives (TP):", tp)
-    print("True Negatives (TN):", tn)
-    print("False Positives (FP):", fp)
-    print("False Negatives (FN):", fn)
+    # print("True Positives (TP):", tp)
+    # print("True Negatives (TN):", tn)
+    # print("False Positives (FP):", fp)
+    # print("False Negatives (FN):", fn)
 
 if __name__ == "__main__":
     main()
