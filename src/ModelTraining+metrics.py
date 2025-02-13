@@ -21,7 +21,8 @@ def preprocess_image(image_path):
     image = Image.open(image_path).convert('RGB')
     # Resize image to 512x512 and convert to numpy array
     image = np.array(image).reshape(512, 512, 3)
-    return image
+    # Convert image to float32
+    return image.astype(np.float32)
 
 def preprocess_data(image_paths, labels):
     # Load and preprocess images
@@ -108,9 +109,9 @@ def create_tf_dataset(image_paths, labels, batch_size=32, buffer_size=1000):
 
 def main():
     # Paths to datasets
-    train_folder = 'e:/Scoala/2024/CNN-Steganalysis/CNN-Steganalysis/archive/train/train'
-    test_folder = 'e:/Scoala/2024/CNN-Steganalysis/CNN-Steganalysis/archive/test/test'
-    validation_folder = 'e:/Scoala/2024/CNN-Steganalysis/CNN-Steganalysis/archive/val/val'
+    train_folder = 'archive/train/train'
+    test_folder = 'archive/test/test'
+    validation_folder = 'archive/val/val'
 
     # Load and preprocess training data
     train_image_paths, train_labels = load_dataset(train_folder)
@@ -144,7 +145,7 @@ def main():
     early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
 
     # Define the path to save the best model
-    best_model_path = 'best_model.keras'
+    best_model_path = 'best_modelCNN.keras'
 
     # Create the ModelCheckpoint callback
     model_checkpoint = ModelCheckpoint(best_model_path, monitor='val_accuracy', save_best_only=True, mode='max', verbose=1)
@@ -153,22 +154,55 @@ def main():
     class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(train_labels), y=train_labels)
     class_weights = {i: class_weights[i] for i in range(len(class_weights))}
 
-    # Train the model
-    history = model.fit(
-        datagen.flow_from_directory(train_folder, target_size=(512, 512), batch_size=64, class_mode='categorical'),
-        epochs=10,  # Increased number of epochs for better training
-        validation_data=datagen.flow_from_directory(validation_folder, target_size=(512, 512), batch_size=32, class_mode='categorical'),
-        class_weight=class_weights,
-        callbacks=[reduce_lr, early_stopping, model_checkpoint]
+    # Ensure that the data generators use 'categorical' mode
+    # Data augmentation
+    train_datagen = ImageDataGenerator(
+        rescale=1.0/255.0,
+        rotation_range=20,
+        width_shift_range=0.2,
+        height_shift_range=0.2,
+        shear_range=0.2,
+        zoom_range=0.2,
+        horizontal_flip=True,
+        fill_mode='nearest'
+    )
+
+    train_dataset = train_datagen.flow_from_directory(
+        train_folder,
+        target_size=(512, 512),
+        batch_size=32,
+        class_mode='categorical',
+        shuffle=True
+    )
+
+    validation_datagen = ImageDataGenerator(
+        rescale=1.0/255.0,
+        rotation_range=20,
+        width_shift_range=0.2,
+        height_shift_range=0.2,
+        shear_range=0.2,
+        zoom_range=0.2,
+        horizontal_flip=True,
+        fill_mode='nearest'
+    )
+
+    validation_dataset = validation_datagen.flow_from_directory(
+        validation_folder,
+        target_size=(512, 512),
+        batch_size=32,
+        class_mode='categorical',
+        shuffle=False
     )
 
     # Save the final model
     model.save('model/modelCNN.keras')
 
-    # Evaluate the model (using the last iteration of the model)
-    y_pred = model.predict(datagen.flow_from_directory(test_folder, target_size=(512, 512), batch_size=64, class_mode='categorical', shuffle=False))
+    # Convert test labels to 1D array and ensure they are of type float
+    y_true = np.array([label for _, label in test_dataset.unbatch().as_numpy_iterator()]).astype(float)
+
+    # Evaluate the model
+    y_pred = model.predict(test_dataset)
     y_pred_classes = np.argmax(y_pred, axis=1)
-    y_true = np.array([label for _, label in test_dataset.unbatch()])  # Convert test labels to 1D array
 
     # Print the metrics
     print("CNN Classification Report:")

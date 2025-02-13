@@ -11,8 +11,8 @@ from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, ModelCh
 from sklearn.metrics import classification_report, confusion_matrix, recall_score, f1_score, precision_score, roc_auc_score
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.applications import VGG16
-from tensorflow.keras.applications.vgg16 import preprocess_input
+from tensorflow.keras.applications import ResNet50
+from tensorflow.keras.applications.resnet50 import preprocess_input
 from tensorflow.keras import mixed_precision
 import os
 
@@ -40,9 +40,9 @@ def preprocess_data(image_paths, labels):
 
     return images_scaled, labels, scaler
 
-def create_vgg16_model(input_shape):
-    # Define a VGG16 model with pre-trained weights
-    base_model = VGG16(weights='imagenet', include_top=False, input_shape=input_shape)
+def create_resnet50_model(input_shape):
+    # Define a ResNet50 model with pre-trained weights
+    base_model = ResNet50(weights='imagenet', include_top=False, input_shape=input_shape)
     
     # Unfreeze the top layers of the base model
     for layer in base_model.layers[-4:]:
@@ -90,7 +90,7 @@ def main():
     validation_folder = 'archive/val/val'
 
     # Model initialization
-    model = create_vgg16_model((512, 512, 3))
+    model = create_resnet50_model((512, 512, 3))
 
     # Data augmentation for training data
     train_datagen = ImageDataGenerator(
@@ -122,9 +122,9 @@ def main():
         class_mode='categorical'
     )
 
-    # Create the VGG16 model
+    # Create the ResNet50 model
     input_shape = (512, 512, 3)
-    model = create_vgg16_model(input_shape)
+    model = create_resnet50_model(input_shape)
 
     # Learning rate reduction and early stopping
     reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=1e-6)
@@ -150,7 +150,7 @@ def main():
     )
 
     # Save the final model
-    model.save('model/modelVGG16.keras')
+    model.save('model/modelResNet50.keras')
 
     # Define the test generator
     test_generator = val_test_datagen.flow_from_directory(
@@ -167,32 +167,32 @@ def main():
     y_true = test_generator.classes[:len(y_pred_classes)]
 
     # Print the metrics
-    print("VGG16 Classification Report:")
+    print("ResNet50 Classification Report:")
     print(classification_report(y_true, y_pred_classes))
 
-    print("VGG16 Confusion Matrix:")
+    print("ResNet50 Confusion Matrix:")
     conf_matrix = confusion_matrix(y_true, y_pred_classes)
     print(conf_matrix)
 
     # Accuracy
     accuracy = np.mean(y_pred_classes == y_true)
-    print("VGG16 Accuracy:", accuracy)
+    print("ResNet50 Accuracy:", accuracy)
 
     # Precision
     precision = precision_score(y_true, y_pred_classes, average='binary')
-    print("VGG16 Precision:", precision)
+    print("ResNet50 Precision:", precision)
 
     # Recall
     recall = recall_score(y_true, y_pred_classes, average='binary')
-    print("VGG16 Recall:", recall)
+    print("ResNet50 Recall:", recall)
 
     # F1 Score
     f1 = f1_score(y_true, y_pred_classes, average='binary')
-    print("VGG16 F1 Score:", f1)
+    print("ResNet50 F1 Score:", f1)
 
     # Area Under the Receiver Operating Characteristic curve (AUC-ROC)
     roc_auc = roc_auc_score(y_true, y_pred_classes)
-    print("VGG16 AUC-ROC:", roc_auc)
+    print("ResNet50 AUC-ROC:", roc_auc)
 
 if __name__ == "__main__":
     main()

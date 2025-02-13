@@ -12,44 +12,35 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import normalize
 import time
 import concurrent.futures
-from sklearn.model_selection import train_test_split
-import concurrent.futures
 from scipy.stats import skew, kurtosis
-from joblib import dump
-from joblib import load
-from concurrent.futures import ThreadPoolExecutor
+from joblib import dump, load
+from concurrent.futures import ProcessPoolExecutor
 
+# Record the start time for execution time measurement
 start_time = time.time()
 
 def extract_images_from_folder(folder_path):
-    image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp']  # Add more extensions if needed
+    # Check if the folder exists
+    if not os.path.exists(folder_path):
+        raise FileNotFoundError(f"The folder {folder_path} does not exist.")
+    
+    # Define the supported image extensions
+    image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp']
     images = []
 
+    # Iterate over files in the folder and collect image file paths
     for file_name in os.listdir(folder_path):
         if any(file_name.lower().endswith(ext) for ext in image_extensions):
             images.append(os.path.join(folder_path, file_name))
 
     return images
 
-# Get the current working directory
-current_dir = os.getcwd()
-
-# Relative path to image folder
-relative_folder_path = 'attachments\\grayscale'
-
-# Join the current directory with the relative folder path
-folder_path = os.path.join(current_dir, relative_folder_path)
-
-images = extract_images_from_folder(folder_path)
-
-#RS analysis
-
 def median_edge_detector(image_matrix):
+    # Convert image matrix to int64 for calculations
     image_matrix = image_matrix.astype(np.int64)
-    # Create a copy of the image matrix to store the predicted values
     predicted_matrix = image_matrix.copy()
 
-    # Iterate over the image matrix and apply the MED predictor formula
+    # Apply the median edge detector to predict pixel values
     for i in range(1, image_matrix.shape[0]):
         for j in range(1, image_matrix.shape[1]):
             predicted_matrix[i, j] = np.median([
@@ -61,134 +52,134 @@ def median_edge_detector(image_matrix):
     return predicted_matrix
 
 def calculate_residuals(image_matrix, predicted_matrix):
-    # Calculate the residuals
+    # Calculate the residuals between the original and predicted matrices
     return image_matrix - predicted_matrix
 
-
-
 def calculate_rs_features(residuals):
-    # Calculate statistics from the residuals
+    # Calculate RS analysis features: mean, standard deviation, skewness, and kurtosis
     features_rs = [np.mean(residuals), np.std(residuals), skew(residuals.flatten()), kurtosis(residuals.flatten())]
     return np.array(features_rs)
 
 def calculate_lbp_features(lbp, num_bins=256):
-    # Calculate the histogram of the LBP values
+    # Calculate the histogram of LBP values and normalize it
     lbp_hist, _ = np.histogram(lbp.ravel(), bins=num_bins, range=(0, num_bins))
-    # Normalize the histogram
     lbp_hist = normalize(lbp_hist.reshape(1, -1), norm='l1')
     return lbp_hist.flatten()
 
-
-
-#LBP analysis
-
-def calculate_histogram(lbp):
-    # Calculate the histogram of the LBP values
-    lbp_hist, _ = np.unique(lbp.ravel(), return_counts=True)
-    # Normalize the histogram
-    lbp_hist = normalize(lbp_hist.reshape(1, -1), norm='l1')
-    return lbp_hist
-
 def calculate_lbp(image_matrix, points=8, radius=1):
-    # Calculate the Local Binary Pattern representation of the image
+    # Calculate the Local Binary Pattern (LBP) representation of the image
     lbp = feature.local_binary_pattern(image_matrix, points, radius, method="uniform")
     return lbp
 
-#Chi-square attack
 def chi_square_attack(image):
     # Calculate the histogram of the image
     histogram = np.histogram(image.flatten(), bins=256, range=(0,256))[0]
-
-    # Calculate the pairs of values
     pairs = np.zeros(128)
     for i in range(0, 256, 2):
         pairs[i // 2] = histogram[i] + histogram[i + 1]
-
-    # Calculate the expected values if no steganography was used
     expected = np.sum(pairs) / 128
-
     # Calculate the chi-square statistic
     chi_square_stat = np.sum((pairs - expected)**2 / expected)
-
     return chi_square_stat
 
-
-#Sample Pair Analysis
-
 def sample_pair_analysis(image):
-    # Flatten the image
+    # Flatten the image and calculate differences between adjacent pixels
     image = image.flatten()
-
-    # Calculate the differences between adjacent pixels
     differences = np.diff(image)
-
-    # Count the number of pairs that have the same value and different signs
     same_value = np.sum(differences == 0)
     different_signs = np.sum(np.diff(np.sign(differences)) != 0)
-
     # Calculate the SPA statistic
     spa_stat = same_value - different_signs
-
     return spa_stat
 
-
-
-from concurrent.futures import ProcessPoolExecutor
-from PIL import Image
-import numpy as np
-import os
-
-# Function to process each image
 def process_image(image_path, label):
-    # Load the image
+    # Open the image and convert to grayscale
     image = Image.open(image_path)
-    image = np.array(image.convert('L'))  # Convert to grayscale
+    image = np.array(image.convert('L'))
 
-    # Calculate the RS Analysis features
+    # Perform RS analysis
     predicted_matrix = median_edge_detector(image)
     residuals = calculate_residuals(image, predicted_matrix)
     features_rs = calculate_rs_features(residuals)
 
-    # Calculate the LBP features
+    # Perform LBP analysis
     lbp = calculate_lbp(image)
     features_lbp = calculate_lbp_features(lbp)
 
-    # Calculate the Chi-square attack feature
+    # Perform Chi-square attack
     features_chi = np.array([chi_square_attack(image)])  # Wrap the scalar in a 1D array
 
-    # Calculate the Sample Pair Analysis feature
+    # Perform Sample Pair Analysis
     features_spa = np.array([sample_pair_analysis(image)])  # Wrap the scalar in a 1D array
 
-    # Concatenate the features into a single feature vector
+    # Concatenate all features into a single feature vector
     features = np.concatenate((features_rs, features_lbp, features_chi, features_spa))
 
     return features, label
 
 def fuse_image_features(images, labels):
-    # List to store the feature vectors
     features_list = []
-
-    # Create a process pool and process each image in parallel
+    # Process images in parallel using ProcessPoolExecutor
     with ProcessPoolExecutor() as executor:
         results = executor.map(process_image, images, labels)
-
-    # Add the feature vectors and labels to the lists
     for features, label in results:
-        features_list.append(features)
+        features_list.append((features, label))
+    features_array, labels_array = zip(*features_list)
+    return np.array(features_array), np.array(labels_array)
 
-    # Convert the list of feature vectors to a 2D array
-    features_array = np.array(features_list)
+def load_images_and_labels(base_folder):
+    # Load images and labels from the specified folders
+    clean_train = extract_images_from_folder(os.path.join(base_folder, 'train/train/clean'))
+    stego_train = extract_images_from_folder(os.path.join(base_folder, 'train/train/stego'))
+    clean_val = extract_images_from_folder(os.path.join(base_folder, 'val/val/clean'))
+    stego_val = extract_images_from_folder(os.path.join(base_folder, 'val/val/stego'))
+    clean_test = extract_images_from_folder(os.path.join(base_folder, 'test/test/clean'))
+    stego_test = extract_images_from_folder(os.path.join(base_folder, 'test/test/stego'))
 
-    return features_array
+    train_images = clean_train + stego_train
+    train_labels = [0] * len(clean_train) + [1] * len(stego_train)
+    val_images = clean_val + stego_val
+    val_labels = [0] * len(clean_val) + [1] * len(stego_val)
+    test_images = clean_test + stego_test
+    test_labels = [0] * len(clean_test) + [1] * len(stego_test)
 
-# for image_path, true_label, predicted_label in zip(all_images, test_labels, test_predictions):
-#     print('Image:', image_path)
-#     print('True label:', true_label)
-#     print('Predicted label:', predicted_label)
-#     print()
+    return train_images, train_labels, val_images, val_labels, test_images, test_labels
 
-#Save the model
-#dump(clf, 'svm_model.joblib')
-end_time = time.time()
-execution_time = end_time - start_time
-print("Execution Time:", execution_time, "seconds")
+def main():
+    # Specify the absolute path to the archive folder
+    base_folder = 'E:/Scoala/2024/CNN-Steganalysis/CNN-Steganalysis/archive'
+    train_images, train_labels, val_images, val_labels, test_images, test_labels = load_images_and_labels(base_folder)
+
+    # Extract and fuse features from images
+    train_features, train_labels = fuse_image_features(train_images, train_labels)
+    val_features, val_labels = fuse_image_features(val_images, val_labels)
+    test_features, test_labels = fuse_image_features(test_images, test_labels)
+
+    # Train an SVM classifier
+    clf = svm.SVC(kernel='linear', probability=True)
+    clf.fit(train_features, train_labels)
+
+    # Predict and evaluate on validation set
+    val_predictions = clf.predict(val_features)
+    print("Validation Accuracy:", accuracy_score(val_labels, val_predictions))
+    print("Validation Precision:", precision_score(val_labels, val_predictions))
+    print("Validation Recall:", recall_score(val_labels, val_predictions))
+    print("Validation F1 Score:", f1_score(val_labels, val_predictions))
+
+    # Predict and evaluate on test set
+    test_predictions = clf.predict(test_features)
+    print("Test Accuracy:", accuracy_score(test_labels, test_predictions))
+    print("Test Precision:", precision_score(test_labels, test_predictions))
+    print("Test Recall:", recall_score(test_labels, test_predictions))
+    print("Test F1 Score:", f1_score(test_labels, test_predictions))
+
+    # Save the trained model
+    dump(clf, 'svm_model.joblib')
+
+    # Print the execution time
+    end_time = time.time()
+    execution_time = end_time - start_time
+    print("Execution Time:", execution_time, "seconds")
+
+if __name__ == "__main__":
+    main()
