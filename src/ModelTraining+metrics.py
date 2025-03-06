@@ -4,7 +4,7 @@ import tensorflow as tf
 from sklearn.preprocessing import StandardScaler
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.models import Sequential, load_model, Model
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, BatchNormalization, GlobalAveragePooling2D
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, BatchNormalization, GlobalAveragePooling2D, DepthwiseConv2D, Input, Concatenate
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, ModelCheckpoint
@@ -15,6 +15,7 @@ from tensorflow.keras.applications import ResNet50
 from tensorflow.keras.applications.resnet50 import preprocess_input
 import os
 from concurrent.futures import ThreadPoolExecutor
+import keras_tuner as kt
 
 def preprocess_image(image_path):
     # Load image and convert to RGB
@@ -36,33 +37,56 @@ def preprocess_data(image_paths, labels):
         for j in range(3):  # Apply scaler to each channel separately
             images_scaled[i, :, :, j] = scaler.fit_transform(images[i, :, :, j])
 
-    # Convert labels to categorical (one-hot encoding)
-    labels = to_categorical(labels, num_classes=2)
-
     return images_scaled, labels, scaler
 
-def create_cnn_model(input_shape):
-    # Define a simple CNN model
-    model = Sequential([
-        Conv2D(32, (3, 3), activation='relu', input_shape=input_shape),
-        BatchNormalization(),
-        MaxPooling2D((2, 2)),
-        Conv2D(64, (3, 3), activation='relu'),
-        BatchNormalization(),
-        MaxPooling2D((2, 2)),
-        Conv2D(128, (3, 3), activation='relu'),
-        BatchNormalization(),
-        MaxPooling2D((2, 2)),
-        Conv2D(256, (3, 3), activation='relu'),
-        BatchNormalization(),
-        MaxPooling2D((2, 2)),
-        Flatten(),
-        Dense(256, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.01)),
-        Dropout(0.5),
-        Dense(2, activation='softmax')  # 2 output classes
-    ])
-    # Compile the model with Adam optimizer and binary cross-entropy loss
-    model.compile(optimizer=Adam(learning_rate=0.001), loss='binary_crossentropy', metrics=['accuracy'])
+# Custom High-Pass Filter Layer
+class HighPassFilter(tf.keras.layers.Layer):
+    def __init__(self):
+        super(HighPassFilter, self).__init__()
+        # Example 3x3 High-pass filter (e.g., an SRM filter)
+        self.kernel = np.array([[ -1,  2,  -1],
+                                [  2, -4,   2],
+                                [ -1,  2,  -1]], dtype=np.float32).reshape(3, 3, 1, 1)
+
+    def call(self, inputs):
+        # Apply the filter to each channel separately
+        channels = tf.split(inputs, num_or_size_splits=3, axis=-1)
+        filtered_channels = [tf.nn.conv2d(channel, self.kernel, strides=1, padding="SAME") for channel in channels]
+        return tf.concat(filtered_channels, axis=-1)
+
+def build_model(hp):
+    inputs = Input(shape=(512, 512, 3))
+    
+    # Step 1: Apply High-Pass Filter
+    x = HighPassFilter()(inputs)
+    
+    # Step 2: Convolutional Feature Extraction
+    x = Conv2D(hp.Int('conv_1_filters', min_value=32, max_value=128, step=32), (3,3), activation='relu', padding='same')(x)
+    x = BatchNormalization()(x)
+    
+    # Step 3: Depthwise Convolutions (For Better Texture Learning)
+    x = DepthwiseConv2D((3,3), activation='relu', padding='same')(x)
+    x = BatchNormalization()(x)
+    
+    x = Conv2D(hp.Int('conv_2_filters', min_value=64, max_value=256, step=64), (3,3), activation='relu', padding='same')(x)
+    x = BatchNormalization()(x)
+
+    x = DepthwiseConv2D((3,3), activation='relu', padding='same')(x)
+    x = BatchNormalization()(x)
+
+    # Step 4: Global Average Pooling Instead of Fully Connected Layers
+    x = GlobalAveragePooling2D()(x)
+
+    # Step 5: Output Layer (Binary Classification)
+    outputs = Dense(1, activation='sigmoid')(x)
+
+    model = Model(inputs, outputs)
+
+    # Compile with Binary Crossentropy Loss
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=hp.Choice('learning_rate', values=[1e-2, 1e-3, 1e-4])),
+                  loss=tf.keras.losses.BinaryCrossentropy(),
+                  metrics=['accuracy'])
+
     return model
 
 def create_resnet50_model(input_shape):
@@ -123,10 +147,15 @@ def main():
     validation_dataset = create_tf_dataset(validation_image_paths, validation_labels)
     test_dataset = create_tf_dataset(test_image_paths, test_labels)
 
-    # Create the CNN model
-    input_shape = (512, 512, 3)
-    model = create_cnn_model(input_shape)  # Comment this line to use ResNet50
-    # model = create_resnet50_model(input_shape)  # Uncomment this line to use ResNet50
+    # Hyperparameter tuning with Keras Tuner
+    tuner = kt.Hyperband(
+        build_model,
+        objective='val_accuracy',
+        max_epochs=10,
+        factor=3,
+        directory='my_dir',
+        project_name='cnn_steganalysis'
+    )
 
     # Data augmentation
     datagen = ImageDataGenerator(
@@ -154,7 +183,7 @@ def main():
     class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(train_labels), y=train_labels)
     class_weights = {i: class_weights[i] for i in range(len(class_weights))}
 
-    # Ensure that the data generators use 'categorical' mode
+    # Ensure that the data generators use 'binary' mode
     # Data augmentation
     train_datagen = ImageDataGenerator(
         rescale=1.0/255.0,
@@ -171,7 +200,7 @@ def main():
         train_folder,
         target_size=(512, 512),
         batch_size=32,
-        class_mode='categorical',
+        class_mode='binary',
         shuffle=True
     )
 
@@ -190,9 +219,19 @@ def main():
         validation_folder,
         target_size=(512, 512),
         batch_size=32,
-        class_mode='categorical',
+        class_mode='binary',
         shuffle=False
     )
+
+    # Perform hyperparameter search
+    tuner.search(train_dataset, epochs=10, validation_data=validation_dataset, callbacks=[reduce_lr, early_stopping])
+
+    # Get the optimal hyperparameters
+    best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
+
+    # Build the model with the optimal hyperparameters and train it
+    model = tuner.hypermodel.build(best_hps)
+    history = model.fit(train_dataset, epochs=25, validation_data=validation_dataset, class_weight=class_weights, callbacks=[reduce_lr, early_stopping, model_checkpoint])
 
     # Save the final model
     model.save('model/modelCNN.keras')
@@ -202,7 +241,7 @@ def main():
 
     # Evaluate the model
     y_pred = model.predict(test_dataset)
-    y_pred_classes = np.argmax(y_pred, axis=1)
+    y_pred_classes = (y_pred > 0.5).astype(int).flatten()
 
     # Print the metrics
     print("CNN Classification Report:")
