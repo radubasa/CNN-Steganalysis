@@ -40,8 +40,8 @@ Create a virtual environment and install the required packages:
 
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows use [activate](http://vscodecontentref_0)
-pip install -r [requirements.txt](http://vscodecontentref_1)
+source venv/bin/activate  
+pip install -r [requirements.txt]
 ```
 
 ## Training the Model
@@ -49,7 +49,7 @@ pip install -r [requirements.txt](http://vscodecontentref_1)
 To train the model, run the following command:
 
 ```bash
-python [ModelTraining+metrics.py](http://vscodecontentref_2)
+python [ModelTraining+metrics.py]
 ```
 
 ## Running the Application
@@ -57,7 +57,7 @@ python [ModelTraining+metrics.py](http://vscodecontentref_2)
 To run the application locally:
 
 ```bash
-python [metricsCNN.py](http://vscodecontentref_3)
+python [metricsCNN.py]
 ```
 
 ## Deployment
@@ -118,30 +118,33 @@ Access the application at the provided IP address.
 
 ## Project Structure
 
+
 ```markdown
 CNN-Steganalysis
 ├── src
-│   ├── metricsCNN.py
-│   ├── ModelTraining+metrics.py
-│   ├── train_model.py
+│   ├── Dataset.py
+│   ├── EmailProcessor.py
+│   ├── Fine-tuned CNN.py
 │   ├── validate_model.py
-│   ├── test_model.py
-│   ├── evaluate_generalization.py
-│   ├── analyze_errors.py
-│   └── deploy_model.py
+│   ├── ImagePreprocessor.py
+│   ├── metricsClass.py
+│   ├── ResNet50.py
+│   ├── Statistical Methods + SVM.py
+│   ├── SteganalysisModelLoad.py
+│   └── VGG166.py
 ├── data
 │   ├── stego_images_dataset
 │   │   ├── train
 │   │   ├── validation
 │   │   └── test
-│   ├── bossbase
-│   └── alaska
+│   ├── bossbase (optional)
+│   └── alaska (optional)
 ├── models
 │   └── best_modelCNN.keras
 ├── results
-│   ├── confusion_matrices
-│   ├── performance_metrics
-│   └── misclassified_samples
+│   ├── Model1.txt
+│   ├── Model2.txt
+│   └── Model3.txt
 ├── [requirements.txt]
 └── [README.md]
 ```
