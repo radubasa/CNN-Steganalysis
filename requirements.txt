@@ -1,0 +1,11 @@
+python==3.8
+imaplib
+os
+opencv-python
+numpy
+RestrictedPython
+Pillow
+tensorflow
+scikit-learn
+keras-tuner
+concurrent.futures
