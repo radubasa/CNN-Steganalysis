@@ -142,8 +142,8 @@ CNN-Steganalysis
 │   ├── confusion_matrices
 │   ├── performance_metrics
 │   └── misclassified_samples
-├── [requirements.txt](http://_vscodecontentref_/4)
-└── [README.md](http://_vscodecontentref_/5)
+├── [requirements.txt]
+└── [README.md]
 ```
 
 
@@ -162,8 +162,8 @@ Create a virtual environment and install the required packages:
 
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows use [activate](http://vscodecontentref_6)
-pip install -r [requirements.txt](http://vscodecontentref_7)
+source venv/bin/activate  
+pip install -r [requirements.txt]
 ```
 
 ### 3. Run the Application
@@ -171,7 +171,7 @@ pip install -r [requirements.txt](http://vscodecontentref_7)
 To run the application locally:
 
 ```bash
-python [metricsCNN.py](http://vscodecontentref_8)
+python [metricsCNN.py]
 ```
 
 ### 4. Deploy to Azure
