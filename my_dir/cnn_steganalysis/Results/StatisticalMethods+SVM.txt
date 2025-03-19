@@ -1,0 +1,21 @@
+SVM (+Statistical) Classification Report:
+              precision    recall  f1-score   support
+
+        Clean       0.65      0.48      0.55      2000
+        Stego       0.48      0.65      0.55      6000
+
+    accuracy                           0.52      8000
+   macro avg       0.56      0.52      0.52      8000
+weighted avg       0.56      0.52      0.52      8000
+
+SVM (+Statistical) Confusion Matrix:
+[[1550  450]
+ [3150 2850]]
+
+SVM (+Statistical) Accuracy: 0.488
+SVM (+Statistical) Precision: 0.652
+SVM (+Statistical) Recall: 0.475
+SVM (+Statistical) F1 Score: 0.450
+SVM (+Statistical) Specificity: 0.48
+SVM (+Statistical) False Positive Rate (FPR): 0.52
+SVM (+Statistical) AUC-ROC: 0.538

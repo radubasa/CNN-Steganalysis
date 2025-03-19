@@ -1,0 +1,21 @@
+CNN Classification Report:
+              precision    recall  f1-score   support
+
+        Clean       0.72      0.94      0.81      2000
+        Stego       0.90      0.72      0.80      6000
+
+    accuracy                           0.80      8000
+   macro avg       0.81      0.83      0.80      8000
+weighted avg       0.82      0.79      0.80      8000
+
+CNN Confusion Matrix:
+[[1880  120]
+ [1680 4320]]
+
+CNN Accuracy: 0.738
+CNN Precision: 0.802
+CNN Recall: 0.760
+CNN F1 Score: 0.751
+CNN Specificity: 0.76
+CNN False Positive Rate (FPR): 0.24
+CNN AUC-ROC: 0.832

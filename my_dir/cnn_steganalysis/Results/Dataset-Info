@@ -1,0 +1,4 @@
+Dataset Information:
+- Train Set: 16,000 images containing different payloads.
+- Test Set: 8,000 images containing different payloads.
+- Validation Set: 8,000 images containing different payloads.

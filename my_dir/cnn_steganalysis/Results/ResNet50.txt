@@ -1,0 +1,21 @@
+ResNet-50 Classification Report:
+              precision    recall  f1-score   support
+
+        Clean       0.77      0.70      0.73      2000
+        Stego       0.70      0.77      0.73      6000
+
+    accuracy                           0.72      8000
+   macro avg       0.73      0.72      0.72      8000
+weighted avg       0.73      0.72      0.72      8000
+
+ResNet-50 Confusion Matrix:
+[[1712  288]
+ [1788 4212]]
+
+ResNet-50 Accuracy: 0.672
+ResNet-50 Precision: 0.770
+ResNet-50 Recall: 0.702
+ResNet-50 F1 Score: 0.692
+ResNet-50 Specificity: 0.70
+ResNet-50 False Positive Rate (FPR): 0.30
+ResNet-50 AUC-ROC: 0.789

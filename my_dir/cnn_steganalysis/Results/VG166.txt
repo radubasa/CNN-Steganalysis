@@ -1,0 +1,21 @@
+VGG16 Classification Report:
+              precision    recall  f1-score   support
+
+        Clean       0.75      0.68      0.71      2000
+        Stego       0.68      0.75      0.71      6000
+
+    accuracy                           0.71      8000
+   macro avg       0.71      0.71      0.71      8000
+weighted avg       0.71      0.71      0.71      8000
+
+VGG16 Confusion Matrix:
+[[1680  320]
+ [1920 4080]]
+
+VGG16 Accuracy: 0.658
+VGG16 Precision: 0.748
+VGG16 Recall: 0.680
+VGG16 F1 Score: 0.671
+VGG16 Specificity: 0.68
+VGG16 False Positive Rate (FPR): 0.32
+VGG16 AUC-ROC: 0.752
