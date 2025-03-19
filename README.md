@@ -16,7 +16,7 @@ The training and testing of StegaScanMail were performed using the **Stego-Image
 
 ## Author
 
-This project was developed by [Your Name] as part of a master's thesis.
+This project was developed by Radu-Cristian Basarabă as part of a master's thesis.
 
 ## Installation
 
@@ -146,8 +146,6 @@ CNN-Steganalysis
 └── [README.md](http://_vscodecontentref_/5)
 ```
 
-```markdown
-# StegaScanner
 
 ## How to Download and Deploy
 
@@ -186,7 +184,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Contact
 
-For any questions or inquiries, please contact Radu-Cristian Basaraba at [r.basaraba@student.utwente.nl].
+For any questions or inquiries, please contact Radu-Cristian Basarabă at [r.basaraba@student.utwente.nl].
 
 This project is made open source for educational purposes and as part of a master's thesis.
 ```
